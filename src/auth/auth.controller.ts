@@ -8,7 +8,7 @@ import {
   Delete,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { SignUpAuthDto } from './dto/forget-password.dto';
+import { SignUpAuthDto } from '../users/dto/create-user.dto';
 import { SignInAuthDto } from './dto/signin-auth.dto';
 
 @Controller('auth')

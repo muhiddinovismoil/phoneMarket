@@ -7,7 +7,7 @@ export class OTP {
   id: string;
   @Column()
   @ApiProperty({ example: '5af123agca412qe1' })
-  user_id: number;
+  user_id: string;
   @Column()
   @ApiProperty({ example: 'g4DA2ad' })
   otp_code: string;
