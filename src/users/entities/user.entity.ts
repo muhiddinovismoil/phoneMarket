@@ -1,10 +1,12 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../../constants/enums/roles';
-import { Orders } from 'src/orders/entities/order.entity';
+import { Orders } from '../../orders/entities/order.entity';
 
 @Entity()
 export class Users {
-  @PrimaryGeneratedColumn('identity')
+  @PrimaryGeneratedColumn('uuid')
+  @ApiProperty()
   id: string;
   @Column({ length: 50 })
   fullname: string;
