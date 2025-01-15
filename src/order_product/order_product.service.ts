@@ -4,17 +4,21 @@ import { UpdateOrderProductDto } from './dto/update-order_product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OrderProducts } from './entities/order_product.entity';
 import { Repository } from 'typeorm';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class OrderProductService {
   constructor(
     @InjectRepository(OrderProducts)
     private orderProductRepository: Repository<OrderProducts>,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
   async create(createOrderProductDto: CreateOrderProductDto) {
     const newOrderProduct = await this.orderProductRepository.create({
       ...createOrderProductDto,
     });
+    await this.redis.set(newOrderProduct.id, JSON.stringify(newOrderProduct));
     await this.orderProductRepository.save(newOrderProduct);
     return {
       message: 'Order product created successfully',
@@ -23,21 +27,40 @@ export class OrderProductService {
   }
 
   async findAll() {
-    const getAllOrderProduct = await this.orderProductRepository.find();
-    if (getAllOrderProduct.length === 0) {
-      throw new NotFoundException('No order product found');
+    const cachedData = await this.redis.keys('*');
+    if (cachedData.length > 0) {
+      const orderProducts = await this.redis.mget(cachedData);
+      return {
+        message: 'All Order Products',
+        order_products: orderProducts.map((orderPorduct) =>
+          JSON.parse(orderPorduct),
+        ),
+      };
+    } else {
+      const getAllOrderProduct = await this.orderProductRepository.find();
+      if (getAllOrderProduct.length === 0) {
+        throw new NotFoundException('No order product found');
+      }
+      return {
+        message: 'All order product',
+        order_products: getAllOrderProduct,
+      };
     }
-    return {
-      message: 'All order product',
-      order_products: getAllOrderProduct,
-    };
   }
 
   async findOne(id: string) {
+    const getCachedData = await this.redis.get(id);
+    if (getCachedData) {
+      return {
+        message: 'Order product detail',
+        order_product: JSON.parse(getCachedData),
+      };
+    }
     const getOrderProduct = await this.orderProductRepository.findOneBy({ id });
     if (!getOrderProduct) {
       throw new NotFoundException('Order product not found');
     }
+    await this.redis.set(id, JSON.stringify(getOrderProduct));
     return {
       message: 'Order product detail',
       order_product: getOrderProduct,
@@ -53,6 +76,10 @@ export class OrderProductService {
       { id: getOrderProduct.id },
       { ...updateOrderProductDto },
     );
+    await this.redis.set(
+      id,
+      JSON.stringify({ ...getOrderProduct, ...updateOrderProductDto }),
+    );
     return {
       message: 'Order product updated successfully',
       order_productId: getOrderProduct.id,
@@ -65,6 +92,7 @@ export class OrderProductService {
       throw new NotFoundException('Order product not found');
     }
     await this.orderProductRepository.delete({ id: getOrderProduct.id });
+    await this.redis.del(id);
     return {
       message: 'Order product deleted successfully',
       order_productId: getOrderProduct.id,
