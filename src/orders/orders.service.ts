@@ -28,18 +28,21 @@ export class OrdersService {
     const { page = 1, limit = 5 } = paginationDto;
     const offset = (page - 1) * limit;
     const cacheKey = `orders:page=${page}:limit=${limit}`;
-    const cachedData = await this.redis.keys('*');
-    if (cachedData.length > 0) {
-      const orders = await this.redis.mget(cachedData);
+    const cachedData = await this.redis.get(cacheKey);
+    if (cachedData) {
       return {
         message: 'All Orders',
-        orders: orders.map((order) => JSON.parse(order)),
+        orders: JSON.parse(cachedData),
       };
     } else {
-      const getAllOrders = await this.orderRepository.find();
+      const getAllOrders = await this.orderRepository.find({
+        skip: offset,
+        take: limit,
+      });
       if (getAllOrders.length === 0) {
         throw new NotFoundException('Orders not found');
       }
+      await this.redis.set(cacheKey, JSON.stringify(getAllOrders));
       return {
         message: 'All Orders',
         orders: getAllOrders,
