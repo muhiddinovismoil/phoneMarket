@@ -15,10 +15,10 @@ export class Orders {
   @PrimaryGeneratedColumn('uuid')
   @ApiProperty({ example: '61asfkjsfkajalkdfjkasl' })
   id: string;
-  @Column()
+  @Column({ type: 'uuid' })
   @ApiProperty({ example: '61asfkjsfk123f1234asdf' })
   user_id: string;
-  @Column()
+  @Column({ type: 'decimal' })
   @ApiProperty({ example: 621.84 })
   total_price: number;
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.pending })

@@ -7,19 +7,19 @@ export class Products {
   @PrimaryGeneratedColumn('uuid')
   @ApiProperty({ example: '123asdfhasjlkq3412jh' })
   id: string;
-  @Column({ length: 75 })
+  @Column({ type: 'varchar', length: 75 })
   @ApiProperty({ example: 'IPhone X' })
   name: string;
-  @Column()
+  @Column({ type: 'decimal' })
   @ApiProperty({ example: 299.99 })
   price: number;
-  @Column()
+  @Column({ type: 'text' })
   @ApiProperty({ example: '256/4 GB Apple Bionic A15 LL/A' })
   info: string;
-  @Column({ default: true })
+  @Column({ type: 'boolean', default: true })
   @ApiProperty({ example: true })
   is_active: boolean;
-  @Column()
+  @Column({ type: 'integer' })
   @ApiProperty({ example: 4 })
   quantity: number;
   @ManyToOne(() => OrderProducts, (orderProducts) => orderProducts.products)
