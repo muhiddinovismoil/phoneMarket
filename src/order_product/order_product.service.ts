@@ -6,6 +6,7 @@ import { OrderProducts } from './entities/order_product.entity';
 import { Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { PaginationDto } from 'src/constants/paginationDto/pagination.dto';
 
 @Injectable()
 export class OrderProductService {
@@ -26,21 +27,25 @@ export class OrderProductService {
     };
   }
 
-  async findAll() {
-    const cachedData = await this.redis.keys('*');
-    if (cachedData.length > 0) {
-      const orderProducts = await this.redis.mget(cachedData);
+  async findAll(paginationDto: PaginationDto) {
+    const { page = 1, limit = 5 } = paginationDto;
+    const offset = (page - 1) * limit;
+    const cacheKey = `order-product:page=${page}:limit=${limit}`;
+    const cachedData = await this.redis.get(cacheKey);
+    if (cachedData) {
       return {
         message: 'All Order Products',
-        order_products: orderProducts.map((orderPorduct) =>
-          JSON.parse(orderPorduct),
-        ),
+        order_products: JSON.parse(cachedData),
       };
     } else {
-      const getAllOrderProduct = await this.orderProductRepository.find();
+      const getAllOrderProduct = await this.orderProductRepository.find({
+        skip: offset,
+        take: limit,
+      });
       if (getAllOrderProduct.length === 0) {
         throw new NotFoundException('No order product found');
       }
+      await this.redis.set(cacheKey, JSON.stringify(getAllOrderProduct));
       return {
         message: 'All order product',
         order_products: getAllOrderProduct,
