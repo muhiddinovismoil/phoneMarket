@@ -20,7 +20,6 @@ export class ProductsService {
       productId: newProduct.id,
     };
   }
-
   async findAll() {
     const getProducts = await this.productRepository.find();
     if (getProducts.length === 0) {
@@ -31,7 +30,6 @@ export class ProductsService {
       products: getProducts,
     };
   }
-
   async findOne(id: string) {
     const getProduct = await this.productRepository.findOneBy({ id });
     if (getProduct) {
@@ -42,7 +40,6 @@ export class ProductsService {
       product: getProduct,
     };
   }
-
   async update(id: string, updateProductDto: UpdateProductDto) {
     const getData = await this.productRepository.findOneBy({ id });
     if (!getData) {
@@ -54,7 +51,6 @@ export class ProductsService {
       productId: getData.id,
     };
   }
-
   async remove(id: string) {
     const getData = await this.productRepository.findOneBy({ id });
     if (!getData) {
