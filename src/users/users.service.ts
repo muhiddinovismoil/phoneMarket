@@ -6,6 +6,7 @@ import { Users } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { PaginationDto } from 'src/constants/paginationDto/pagination.dto';
 
 @Injectable()
 export class UsersService {
@@ -18,23 +19,29 @@ export class UsersService {
     await this.redis.set(newUser.id, JSON.stringify(newUser));
     return newUser;
   }
-  async findAll() {
-    const cachedData = await this.redis.keys('*');
-    if (cachedData.length > 0) {
-      const users = await this.redis.mget(cachedData);
+  async findAll(paginationDto: PaginationDto) {
+    const { page = 1, limit = 5 } = paginationDto;
+    const offset = (page - 1) * limit;
+    const cacheKey = `product:page=${page}:limit=${limit}`;
+    const cachedData = await this.redis.get(cacheKey);
+    if (cachedData) {
       return {
         message: 'All Users',
-        users: users.map((user) => JSON.parse(user)),
+        users: JSON.parse(cachedData),
       };
     } else {
-      const allUser = await this.userRepository.find();
+      const allUser = await this.userRepository.find({
+        skip: offset,
+        take: limit,
+      });
       if (allUser.length == 0) {
         throw new NotFoundException('Data not found');
       }
-      allUser.forEach(async (user) => {
-        await this.redis.set(user.id, JSON.stringify(user));
-      });
-      return allUser;
+      await this.redis.set(cacheKey, JSON.stringify(allUser));
+      return {
+        message: 'All User',
+        users: allUser,
+      };
     }
   }
   async findOne(id: string) {

@@ -6,6 +6,7 @@ import { Products } from './entities/product.entity';
 import { Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { PaginationDto } from '../constants/paginationDto/pagination.dto';
 @Injectable()
 export class ProductsService {
   constructor(
@@ -23,24 +24,27 @@ export class ProductsService {
       productId: newProduct.id,
     };
   }
-  async findAll() {
-    const redisData = await this.redis.keys('*');
-    if (redisData.length > 0) {
-      const products = await this.redis.mget(redisData);
+  async findAll(paginationDto: PaginationDto) {
+    const { page = 1, limit = 5 } = paginationDto;
+    const offset = (page - 1) * limit;
+    const cacheKey = `products:page=${page}:limit=${limit}`;
+    const cachedData = await this.redis.get(cacheKey);
+    if (cachedData) {
       return {
         message: 'All Products',
-        products: products.map((product) => JSON.parse(product)),
+        products: JSON.parse(cachedData),
       };
     } else {
-      const getProducts = await this.productRepository.find();
+      const getProducts = await this.productRepository.find({
+        skip: offset,
+        take: limit,
+      });
       if (getProducts.length === 0) {
         throw new NotFoundException('Products not found');
       }
-      getProducts.forEach(async (product) => {
-        await this.redis.set(product.id, JSON.stringify(product));
-      });
+      await this.redis.set(cacheKey, JSON.stringify(getProducts));
       return {
-        message: 'All Prodcuts',
+        message: 'All Products',
         products: getProducts,
       };
     }
