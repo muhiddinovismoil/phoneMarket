@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsNumber, IsOptional, IsPositive } from 'class-validator';
+import {
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 
 export class PaginationDto {
   @IsOptional()
@@ -13,4 +19,15 @@ export class PaginationDto {
   @IsNumber()
   @Transform(({ value }) => parseInt(value, 10))
   readonly limit?: number;
+  @IsOptional()
+  @IsString()
+  readonly search?: string;
+
+  @IsOptional()
+  @IsObject()
+  readonly filter?: {
+    name?: string;
+    price?: number;
+    info?: string;
+  };
 }

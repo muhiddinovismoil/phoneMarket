@@ -3,7 +3,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Products } from './entities/product.entity';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { PaginationDto } from '../constants/paginationDto/pagination.dto';
@@ -25,9 +25,10 @@ export class ProductsService {
     };
   }
   async findAll(paginationDto: PaginationDto) {
-    const { page = 1, limit = 5 } = paginationDto;
+    const { page = 1, limit = 5, search, filter } = paginationDto;
     const offset = (page - 1) * limit;
-    const cacheKey = `products:page=${page}:limit=${limit}`;
+
+    const cacheKey = `products:page=${page}:limit=${limit}:search=${search}:filter=${filter}`;
     const cachedData = await this.redis.get(cacheKey);
     if (cachedData) {
       return {
@@ -35,13 +36,38 @@ export class ProductsService {
         products: JSON.parse(cachedData),
       };
     } else {
-      const getProducts = await this.productRepository.find({
+      const queryOptions: any = {
         skip: offset,
         take: limit,
-      });
+        where: {},
+      };
+
+      if (search) {
+        queryOptions.where.name = Like(`%${search}%`);
+      }
+
+      if (filter) {
+        const filterConditions = [];
+        if (filter.name) {
+          filterConditions.push({ name: Like(`%${filter.name}%`) });
+        }
+        if (filter.price) {
+          filterConditions.push({ price: filter.price });
+        }
+        if (filter.info) {
+          filterConditions.push({ info: Like(`%${filter.info}%`) });
+        }
+
+        if (filterConditions.length > 0) {
+          queryOptions.where = filterConditions;
+        }
+      }
+
+      const getProducts = await this.productRepository.find(queryOptions);
       if (getProducts.length === 0) {
         throw new NotFoundException('Products not found');
       }
+
       await this.redis.set(cacheKey, JSON.stringify(getProducts));
       return {
         message: 'All Products',
@@ -49,6 +75,7 @@ export class ProductsService {
       };
     }
   }
+
   async findOne(id: string) {
     const redisData = await this.redis.get(id);
     if (redisData) {
