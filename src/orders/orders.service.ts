@@ -6,6 +6,7 @@ import { Orders } from './entities/order.entity';
 import { Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { PaginationDto } from 'src/constants/paginationDto/pagination.dto';
 
 @Injectable()
 export class OrdersService {
@@ -23,7 +24,10 @@ export class OrdersService {
     };
   }
 
-  async findAll() {
+  async findAll(paginationDto: PaginationDto) {
+    const { page = 1, limit = 5 } = paginationDto;
+    const offset = (page - 1) * limit;
+    const cacheKey = `orders:page=${page}:limit=${limit}`;
     const cachedData = await this.redis.keys('*');
     if (cachedData.length > 0) {
       const orders = await this.redis.mget(cachedData);

@@ -22,7 +22,7 @@ export class UsersService {
   async findAll(paginationDto: PaginationDto) {
     const { page = 1, limit = 5 } = paginationDto;
     const offset = (page - 1) * limit;
-    const cacheKey = `product:page=${page}:limit=${limit}`;
+    const cacheKey = `users:page=${page}:limit=${limit}`;
     const cachedData = await this.redis.get(cacheKey);
     if (cachedData) {
       return {
