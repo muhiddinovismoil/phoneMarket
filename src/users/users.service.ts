@@ -46,6 +46,25 @@ export class UsersService {
       user_id: getUser.id,
     };
   }
+  async activateUser(email: string) {
+    const findUser = await this.userRepository.findOneBy({ email });
+    if (!findUser) {
+      throw new NotFoundException('Data not found');
+    }
+    await this.userRepository.update(email, { isActive: true });
+    return {
+      message: 'User Account activated',
+    };
+  }
+  async saveToken(id: string, refreshToken: string) {
+    await this.userRepository.update(id, { refresh_token: refreshToken });
+  }
+  async updatePassword(email: string, password: string) {
+    await this.userRepository.update(email, { password: password });
+    return {
+      message: 'User password resetted successfully',
+    };
+  }
   async remove(id: string) {
     const findUser = await this.userRepository.findOneBy({ id });
     if (!findUser) {
