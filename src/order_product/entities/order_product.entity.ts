@@ -8,10 +8,10 @@ export class OrderProducts {
   @PrimaryGeneratedColumn('uuid')
   @ApiProperty({ example: '98adsf18234adgj123' })
   id: string;
-  @Column()
+  @Column({ type: 'uuid' })
   @ApiProperty({ example: '135asjfhdljaksweqwe' })
   order_id: string;
-  @Column()
+  @Column({ type: 'uuid' })
   @ApiProperty({ example: '51uias123youiasdf' })
   product_id: string;
   @OneToMany(() => Products, (product) => product.orderProducts)

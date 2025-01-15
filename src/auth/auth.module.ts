@@ -9,13 +9,12 @@ import { jwtConstants } from '../constants/jwt.constant';
 
 @Module({
   imports: [
+    UsersModule,
     JwtModule.register({
       global: true,
       secret: jwtConstants.access.secret,
       signOptions: { expiresIn: jwtConstants.access.expiresIn },
     }),
-    ,
-    UsersModule,
     TypeOrmModule.forFeature([OTP]),
   ],
   controllers: [AuthController],
