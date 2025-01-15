@@ -4,35 +4,64 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Users } from './entities/user.entity';
 import { Repository } from 'typeorm';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(Users) private userRepository: Repository<Users>,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
   async create(createUserDto: SignUpAuthDto) {
     const newUser = await this.userRepository.save(createUserDto);
+    await this.redis.set(newUser.id, JSON.stringify(newUser));
     return newUser;
   }
   async findAll() {
-    const allUser = await this.userRepository.find();
-    if (allUser.length == 0) {
-      throw new NotFoundException('Data not found');
+    const cachedData = await this.redis.keys('*');
+    if (cachedData.length > 0) {
+      const users = await this.redis.mget(cachedData);
+      return {
+        message: 'All Users',
+        users: users.map((user) => JSON.parse(user)),
+      };
+    } else {
+      const allUser = await this.userRepository.find();
+      if (allUser.length == 0) {
+        throw new NotFoundException('Data not found');
+      }
+      allUser.forEach(async (user) => {
+        await this.redis.set(user.id, JSON.stringify(user));
+      });
+      return allUser;
     }
-    return allUser;
   }
   async findOne(id: string) {
+    const cachedData = await this.redis.get(id);
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
     const findUser = await this.userRepository.findOneBy({ id });
     if (!findUser) {
       throw new NotFoundException('User not found');
     }
+    await this.redis.set(findUser.id, JSON.stringify(findUser));
     return findUser;
   }
   async findByEmail(email: string) {
+    const cachedData = await this.redis.get(email);
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
     const findUserByEmail = await this.userRepository.findOneBy({ email });
     if (!findUserByEmail) {
       throw new NotFoundException('User not found');
     }
+    await this.redis.set(
+      findUserByEmail.email,
+      JSON.stringify(findUserByEmail),
+    );
     return findUserByEmail;
   }
   async update(id: string, updateUserDto: UpdateUserDto) {
@@ -41,6 +70,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
     await this.userRepository.update(id, updateUserDto);
+    await this.redis.set(id, JSON.stringify({ ...getUser, ...updateUserDto }));
     return {
       message: 'Updated',
       user_id: getUser.id,
@@ -52,15 +82,21 @@ export class UsersService {
       throw new NotFoundException('Data not found');
     }
     await this.userRepository.update({ email: email }, { isActive: true });
+    await this.redis.set(
+      email,
+      JSON.stringify({ ...findUser, isActive: true }),
+    );
     return {
       message: 'User Account activated',
     };
   }
   async saveToken(id: string, refreshToken: string) {
     await this.userRepository.update(id, { refresh_token: refreshToken });
+    await this.redis.set(id, JSON.stringify({ refresh_token: refreshToken }));
   }
   async updatePassword(email: string, password: string) {
     await this.userRepository.update({ email: email }, { password: password });
+    await this.redis.set(email, JSON.stringify({ password: password }));
     return {
       message: 'User password resetted successfully',
     };
@@ -71,6 +107,7 @@ export class UsersService {
       throw new NotFoundException('User is not found');
     }
     await this.userRepository.delete(id);
+    await this.redis.del(id);
     return {
       message: 'Deleted',
       user_id: findUser.id,

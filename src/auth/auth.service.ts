@@ -14,11 +14,14 @@ import { SignUpAuthDto } from '../users/dto/create-user.dto';
 import { generateOtp } from '../helpers/otp';
 import { sendEmail } from '../helpers/sendMail';
 import { OTP } from '../auth/entities/otp.entity';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(OTP) private otpRepositories: Repository<OTP>,
+    @InjectRedis() private readonly redis: Redis,
     private readonly userService: UsersService,
     private readonly mailHelper: MailerService,
     private readonly jwtService: JwtService,
@@ -42,6 +45,7 @@ export class AuthService {
       user_id: user.id,
     });
     await this.otpRepositories.save(otpdata);
+    await this.redis.set(user.email, otp);
     return {
       message: 'Registration successful',
       user_id: user.id,
@@ -91,6 +95,7 @@ export class AuthService {
     if (otpData.otp_code == otp_code) {
       await this.userService.activateUser(email);
       await this.otpRepositories.delete({ user_id: findUser.id });
+      await this.redis.del(email);
       return {
         messsage: 'User successfully verified',
       };
