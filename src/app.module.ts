@@ -6,8 +6,13 @@ import { ProductsModule } from './products/products.module';
 import { OrderProductModule } from './order_product/order_product.module';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { RedisModule } from '@nestjs-modules/ioredis';
 @Module({
   imports: [
+    RedisModule.forRoot({
+      type: 'single',
+      url: 'redis://localhost:6379',
+    }),
     AuthModule,
     UsersModule,
     OrdersModule,
