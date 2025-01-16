@@ -3,7 +3,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Orders } from './entities/order.entity';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { PaginationDto } from 'src/constants/paginationDto/pagination.dto';
@@ -25,9 +25,9 @@ export class OrdersService {
   }
 
   async findAll(paginationDto: PaginationDto) {
-    const { page = 1, limit = 5 } = paginationDto;
+    const { page = 1, limit = 5, search, filter } = paginationDto;
     const offset = (page - 1) * limit;
-    const cacheKey = `orders:page=${page}:limit=${limit}`;
+    const cacheKey = `orders:page=${page}:limit=${limit}:search=${search}:filter=${filter}`;
     const cachedData = await this.redis.get(cacheKey);
     if (cachedData) {
       return {
@@ -35,6 +35,30 @@ export class OrdersService {
         orders: JSON.parse(cachedData),
       };
     } else {
+      const queryOptions: any = {
+        skip: offset,
+        take: limit,
+        where: {},
+      };
+      if (search) {
+        queryOptions.where.total_price = Like(`%${search}%`);
+      }
+      if (filter) {
+        const filterConditions = [];
+        if (filter.total_price) {
+          filterConditions.push({
+            total_price: Like(`%${filter.total_price}%`),
+          });
+        }
+        if (filter.status) {
+          filterConditions.push({
+            status: Like(`%${filter.status}%`),
+          });
+        }
+        if (filterConditions.length > 0) {
+          queryOptions.where = filterConditions;
+        }
+      }
       const getAllOrders = await this.orderRepository.find({
         skip: offset,
         take: limit,

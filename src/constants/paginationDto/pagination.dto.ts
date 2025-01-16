@@ -6,6 +6,7 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
+import { OrderStatus } from '../enums/orderstatus';
 
 export class PaginationDto {
   @IsOptional()
@@ -29,5 +30,7 @@ export class PaginationDto {
     name?: string;
     price?: number;
     info?: string;
+    total_price?: number;
+    status: OrderStatus;
   };
 }
