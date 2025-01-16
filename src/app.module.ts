@@ -7,8 +7,15 @@ import { OrderProductModule } from './order_product/order_product.module';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@nestjs-modules/ioredis';
+import { ThrottlerModule } from '@nestjs/throttler';
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60,
+        limit: 10,
+      },
+    ]),
     RedisModule.forRoot({
       type: 'single',
       url: 'redis://localhost:6379',

@@ -16,6 +16,8 @@ import { sendEmail } from '../helpers/sendMail';
 import { OTP } from '../auth/entities/otp.entity';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { ResetPasswordAuthDto } from './dto/reset-password.dto';
+import { OtpVerifyAuthDto } from './dto/otp-verification.dto';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +29,10 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
   async signup(signUpAuthDto: SignUpAuthDto) {
+    const checkUser = await this.userService.findByEmail(signUpAuthDto.email);
+    if (checkUser) {
+      throw new BadRequestException('User already exists');
+    }
     const hashPass = await bcrypt.hash(signUpAuthDto.password, 10);
     const user = await this.userService.create({
       ...signUpAuthDto,
@@ -79,33 +85,41 @@ export class AuthService {
     const refreshToken = await this.jwtService.signAsync(refreshPayload);
     await this.userService.saveToken(getUser.id, refreshToken);
     return {
+      message: 'User signed in',
       accessToken,
       refreshToken,
     };
   }
 
-  async verifyOTP(email: string, otp_code: string) {
-    const findUser = await this.userService.findByEmail(email);
+  async verifyOTP(otpVerifyDto: OtpVerifyAuthDto) {
+    const findUser = await this.userService.findByEmail(otpVerifyDto.email);
     const otpData = await this.otpRepositories.findOneBy({
       user_id: findUser.id,
     });
     if (!otpData) {
       throw new NotFoundException('Otp not found or expired already');
     }
-    if (otpData.otp_code == otp_code) {
-      await this.userService.activateUser(email);
+    if (otpData.otp_code == otpVerifyDto.otp_code) {
+      await this.userService.activateUser(otpVerifyDto.email);
       await this.otpRepositories.delete({ user_id: findUser.id });
-      await this.redis.del(email);
+      await this.redis.del(otpVerifyDto.email);
       return {
-        messsage: 'User successfully verified',
+        messsage: 'OTP verified',
       };
     }
     throw new BadRequestException('OTP not suit');
   }
-  async resetPassword(email: string, oldPassword: string, password: string) {
-    const findUser = await this.userService.findByEmail(email);
-    if (findUser.password == oldPassword) {
-      await this.userService.updatePassword(email, password);
+  async resetPassword(resetPasswordDto: ResetPasswordAuthDto) {
+    const findUser = await this.userService.findByEmail(resetPasswordDto.email);
+    if (findUser.password == resetPasswordDto.oldPassword) {
+      await this.userService.updatePassword(
+        resetPasswordDto.email,
+        await bcrypt.hash(resetPasswordDto.password, 10),
+      );
+      return {
+        message: 'Password updated successfully',
+      };
     }
+    throw new BadRequestException('Old password not suit');
   }
 }

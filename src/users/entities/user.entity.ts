@@ -1,10 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  ManyToOne,
-  OneToMany,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../../constants/enums/roles';
 import { Orders } from '../../orders/entities/order.entity';
@@ -39,7 +33,7 @@ export class Users {
       'eyJhbGciOiJIzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NzdjMzg3YjI5YWMwZWI1Yjg1OGRiZDMiLCJlbWFpbCI6Im11aGlkZGlub3Zpc21vaWwy',
   })
   refresh_token: string;
-  @ManyToOne(() => Orders, (order) => order.users)
+  @OneToMany(() => Orders, (order) => order.users)
   orders: Orders[];
   @OneToMany(() => OTP, (otp) => otp.users)
   otps: OTP[];

@@ -17,6 +17,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('PHONE MARKET')
     .setDescription('Phone Market app backend')
+    .addBearerAuth()
     .setVersion('1.0')
     .addTag('PhoneMarket')
     .build();

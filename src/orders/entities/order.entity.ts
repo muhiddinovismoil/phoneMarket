@@ -1,10 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  OneToMany,
-  ManyToOne,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderStatus } from '../../constants/enums/orderstatus';
 import { OrderProducts } from '../../order_product/entities/order_product.entity';
@@ -24,7 +18,7 @@ export class Orders {
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.pending })
   @ApiProperty({ example: OrderStatus.pending })
   status: OrderStatus;
-  @OneToMany(() => Users, (user) => user.orders)
+  @ManyToOne(() => Users, (user) => user.orders)
   users: Users[];
   @ManyToOne(() => OrderProducts, (orderProducts) => orderProducts.orders)
   orderProducts: OrderProducts[];
