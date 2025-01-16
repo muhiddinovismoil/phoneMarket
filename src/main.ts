@@ -3,9 +3,17 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as basicAuth from 'express-basic-auth';
+import { WinstonModule } from 'nest-winston';
+import { Logtail } from '@logtail/node';
+import { LogtailTransport } from '@logtail/winston';
 
+const logtail = new Logtail(process.env.LOGTAIL_TOKEN);
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger({
+      transports: [new LogtailTransport(logtail)],
+    }),
+  });
   app.useGlobalPipes(new ValidationPipe());
   app.use(
     ['/api/docs'],

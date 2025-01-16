@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { LogtailService } from './logtail.service';
 @Module({
   imports: [
     ThrottlerModule.forRoot([
@@ -41,5 +42,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
       synchronize: true,
     }),
   ],
+  providers: [LogtailService],
+  exports: [LogtailService],
 })
 export class AppModule {}
