@@ -43,8 +43,9 @@ jobs:
           ssh -v -o StrictHostKeyChecking=no ${{ secrets.USER }}@${{ secrets.HOST }} <<'ENDSSH'
           cd ${{ secrets.APP_PATH }}
           git pull
-          npm install pnpm -g && pnpm install
+          npm install pnpm -g
+          pnpm install
           docker compose down
           docker compose up -d
-          npx pm2 restart ${{secrets.APP_NAME}},
+          npx pm2 restart ${{ secrets.APP_NAME }},
           ENDSSH
