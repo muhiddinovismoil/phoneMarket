@@ -40,6 +40,7 @@ export class ProductsService {
         skip: offset,
         take: limit,
         where: {},
+        relations: ['orderProducts'],
       };
 
       if (search) {

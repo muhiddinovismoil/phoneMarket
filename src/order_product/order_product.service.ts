@@ -41,6 +41,7 @@ export class OrderProductService {
       const getAllOrderProduct = await this.orderProductRepository.find({
         skip: offset,
         take: limit,
+        relations: ['orders', 'products'],
       });
       if (getAllOrderProduct.length === 0) {
         throw new NotFoundException('No order product found');

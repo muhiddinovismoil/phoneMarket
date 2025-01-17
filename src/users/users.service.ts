@@ -33,6 +33,7 @@ export class UsersService {
       const allUser = await this.userRepository.find({
         skip: offset,
         take: limit,
+        relations: ['orders'],
       });
       if (allUser.length == 0) {
         throw new NotFoundException('Data not found');

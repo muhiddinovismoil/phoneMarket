@@ -39,6 +39,7 @@ export class OrdersService {
         skip: offset,
         take: limit,
         where: {},
+        relations: ['orderProducts'],
       };
       if (search) {
         queryOptions.where.total_price = Like(`%${search}%`);
