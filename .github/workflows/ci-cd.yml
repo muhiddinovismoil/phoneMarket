@@ -51,6 +51,9 @@ jobs:
           npm install pnpm -g || { echo "Failed to install pnpm!"; exit 1; }
           pnpm install || { echo "Dependency installation failed!"; exit 1; }
 
+          echo "Building application ..."
+          pnpm run build || { echo "Build failed!"; exit 1; }
+
           echo "Restarting Docker services..."
           docker compose down || { echo "Failed to stop Docker services!"; exit 1; }
           docker compose up -d || { echo "Failed to start Docker services!"; exit 1; }
