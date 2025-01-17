@@ -7,10 +7,15 @@ import { OrderProductModule } from './order_product/order_product.module';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@nestjs-modules/ioredis';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LogtailService } from './logtail.service';
+import { APP_GUARD } from '@nestjs/core';
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      envFilePath: '.env',
+      isGlobal: true,
+    }),
     ThrottlerModule.forRoot([
       {
         ttl: 60,
@@ -26,10 +31,6 @@ import { LogtailService } from './logtail.service';
     OrdersModule,
     ProductsModule,
     OrderProductModule,
-    ConfigModule.forRoot({
-      envFilePath: '.env',
-      isGlobal: true,
-    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.PG_HOST,
@@ -42,7 +43,13 @@ import { LogtailService } from './logtail.service';
       synchronize: true,
     }),
   ],
-  providers: [LogtailService],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    LogtailService,
+  ],
   exports: [LogtailService],
 })
 export class AppModule {}

@@ -6,14 +6,16 @@ import * as basicAuth from 'express-basic-auth';
 import { WinstonModule } from 'nest-winston';
 import { Logtail } from '@logtail/node';
 import { LogtailTransport } from '@logtail/winston';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 const logtail = new Logtail(process.env.LOGTAIL_TOKEN);
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: WinstonModule.createLogger({
       transports: [new LogtailTransport(logtail)],
     }),
   });
+  app.set('trust proxy', 'loopback');
   app.useGlobalPipes(new ValidationPipe());
   app.use(
     ['/api/docs'],

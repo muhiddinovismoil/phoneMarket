@@ -28,6 +28,7 @@ import {
   ApiQuery,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('users')
 export class UsersController {
@@ -62,6 +63,7 @@ export class UsersController {
   @ApiNotFoundResponse({ description: 'Users not found' })
   @UseGuards(AuthGuard, RoleGuard)
   @Roles(Role.admin)
+  @Throttle({ default: { limit: 10, ttl: 10000 } })
   @Get()
   async findAll(@Query() paginationDto: PaginationDto) {
     return await this.usersService.findAll(paginationDto);
