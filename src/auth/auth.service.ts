@@ -18,7 +18,7 @@ import Redis from 'ioredis';
 import { ResetPasswordAuthDto } from './dto/reset-password.dto';
 import { OtpVerifyAuthDto } from './dto/otp-verification.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class AuthService {
@@ -150,7 +150,7 @@ export class AuthService {
   }
 
   private handlePrismaError(error: any) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error instanceof PrismaClientKnownRequestError) {
       switch (error.code) {
         case 'P2002':
           throw new ConflictException('Unique constraint failed');
