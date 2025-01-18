@@ -1,30 +1,41 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { CreateOrderProductDto } from './dto/create-order_product.dto';
 import { UpdateOrderProductDto } from './dto/update-order_product.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { OrderProducts } from './entities/order_product.entity';
-import { Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { PaginationDto } from 'src/constants/paginationDto/pagination.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class OrderProductService {
   constructor(
-    @InjectRepository(OrderProducts)
-    private orderProductRepository: Repository<OrderProducts>,
+    private readonly prismaRepository: PrismaService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
+
   async create(createOrderProductDto: CreateOrderProductDto) {
-    const newOrderProduct = await this.orderProductRepository.create({
-      ...createOrderProductDto,
-    });
-    await this.redis.set(newOrderProduct.id, JSON.stringify(newOrderProduct));
-    await this.orderProductRepository.save(newOrderProduct);
-    return {
-      message: 'Order product created successfully',
-      order_productId: newOrderProduct.id,
-    };
+    try {
+      const newOrderProduct = await this.prismaRepository.order_products.create(
+        {
+          data: {
+            ...createOrderProductDto,
+          },
+        },
+      );
+      await this.redis.set(newOrderProduct.id, JSON.stringify(newOrderProduct));
+      return {
+        message: 'Order product created successfully',
+        order_productId: newOrderProduct.id,
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
   }
 
   async findAll(paginationDto: PaginationDto) {
@@ -38,19 +49,27 @@ export class OrderProductService {
         order_products: JSON.parse(cachedData),
       };
     } else {
-      const getAllOrderProduct = await this.orderProductRepository.find({
-        skip: offset,
-        take: limit,
-        relations: ['orders', 'products'],
-      });
-      if (getAllOrderProduct.length === 0) {
-        throw new NotFoundException('No order product found');
+      try {
+        const getAllOrderProduct =
+          await this.prismaRepository.order_products.findMany({
+            skip: offset,
+            take: limit,
+            include: {
+              order: true,
+              product: true,
+            },
+          });
+        if (getAllOrderProduct.length === 0) {
+          throw new NotFoundException('No order product found');
+        }
+        await this.redis.set(cacheKey, JSON.stringify(getAllOrderProduct));
+        return {
+          message: 'All order product',
+          order_products: getAllOrderProduct,
+        };
+      } catch (error) {
+        this.handlePrismaError(error);
       }
-      await this.redis.set(cacheKey, JSON.stringify(getAllOrderProduct));
-      return {
-        message: 'All order product',
-        order_products: getAllOrderProduct,
-      };
     }
   }
 
@@ -62,46 +81,86 @@ export class OrderProductService {
         order_product: JSON.parse(getCachedData),
       };
     }
-    const getOrderProduct = await this.orderProductRepository.findOneBy({ id });
-    if (!getOrderProduct) {
-      throw new NotFoundException('Order product not found');
+    try {
+      const getOrderProduct =
+        await this.prismaRepository.order_products.findUnique({
+          where: { id },
+          include: {
+            order: true,
+            product: true,
+          },
+        });
+      if (!getOrderProduct) {
+        throw new NotFoundException('Order product not found');
+      }
+      await this.redis.set(id, JSON.stringify(getOrderProduct));
+      return {
+        message: 'Order product detail',
+        order_product: getOrderProduct,
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
     }
-    await this.redis.set(id, JSON.stringify(getOrderProduct));
-    return {
-      message: 'Order product detail',
-      order_product: getOrderProduct,
-    };
   }
 
   async update(id: string, updateOrderProductDto: UpdateOrderProductDto) {
-    const getOrderProduct = await this.orderProductRepository.findOneBy({ id });
-    if (!getOrderProduct) {
-      throw new NotFoundException('Order product not found');
+    try {
+      const getOrderProduct =
+        await this.prismaRepository.order_products.findUnique({
+          where: { id },
+        });
+      if (!getOrderProduct) {
+        throw new NotFoundException('Order product not found');
+      }
+      const updatedOrderProduct =
+        await this.prismaRepository.order_products.update({
+          where: { id: getOrderProduct.id },
+          data: { ...updateOrderProductDto },
+        });
+      await this.redis.set(id, JSON.stringify(updatedOrderProduct));
+      return {
+        message: 'Order product updated successfully',
+        order_productId: updatedOrderProduct.id,
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
     }
-    await this.orderProductRepository.update(
-      { id: getOrderProduct.id },
-      { ...updateOrderProductDto },
-    );
-    await this.redis.set(
-      id,
-      JSON.stringify({ ...getOrderProduct, ...updateOrderProductDto }),
-    );
-    return {
-      message: 'Order product updated successfully',
-      order_productId: getOrderProduct.id,
-    };
   }
 
   async remove(id: string) {
-    const getOrderProduct = await this.orderProductRepository.findOneBy({ id });
-    if (!getOrderProduct) {
-      throw new NotFoundException('Order product not found');
+    try {
+      const getOrderProduct =
+        await this.prismaRepository.order_products.findUnique({
+          where: { id },
+        });
+      if (!getOrderProduct) {
+        throw new NotFoundException('Order product not found');
+      }
+      await this.prismaRepository.order_products.delete({
+        where: { id: getOrderProduct.id },
+      });
+      await this.redis.del(id);
+      return {
+        message: 'Order product deleted successfully',
+        order_productId: getOrderProduct.id,
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
     }
-    await this.orderProductRepository.delete({ id: getOrderProduct.id });
-    await this.redis.del(id);
-    return {
-      message: 'Order product deleted successfully',
-      order_productId: getOrderProduct.id,
-    };
+  }
+
+  private handlePrismaError(error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      switch (error.code) {
+        case 'P2002':
+          throw new ConflictException('Unique constraint failed');
+        case 'P2025':
+          throw new NotFoundException('Record not found');
+        default:
+          throw new InternalServerErrorException('A database error occurred');
+      }
+    } else {
+      throw new InternalServerErrorException('An unexpected error occurred');
+    }
   }
 }

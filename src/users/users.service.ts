@@ -2,41 +2,59 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { SignUpAuthDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Users } from './entities/user.entity';
-import { Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { PaginationDto } from 'src/constants/paginationDto/pagination.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(Users) private userRepository: Repository<Users>,
+    private readonly prismaRepository: PrismaService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
+
   async create(createUserDto: SignUpAuthDto) {
-    const getUser = await this.userRepository.findOneBy({
-      email: createUserDto.email,
-    });
-    if (!getUser) {
-      const newUser = await this.userRepository.save(createUserDto);
-      await this.redis.set(newUser.id, JSON.stringify(newUser));
-      return newUser;
-    } else {
-      throw new BadRequestException('User already exists');
+    try {
+      const getUser = await this.prismaRepository.users.findUnique({
+        where: {
+          email: createUserDto.email,
+        },
+      });
+      if (!getUser) {
+        const newUser = await this.prismaRepository.users.create({
+          data: { ...createUserDto },
+        });
+        await this.redis.set(newUser.id, JSON.stringify(newUser));
+        return newUser;
+      } else {
+        throw new BadRequestException('User already exists');
+      }
+    } catch (error) {
+      this.handlePrismaError(error);
     }
   }
+
   async findByEmail(email: string) {
-    const loginUser = await this.userRepository.findOneBy({ email });
-    if (!loginUser) {
-      throw new NotFoundException('User not found');
+    try {
+      const loginUser = await this.prismaRepository.users.findUnique({
+        where: { email },
+      });
+      if (!loginUser) {
+        throw new NotFoundException('User not found');
+      }
+      return loginUser;
+    } catch (error) {
+      this.handlePrismaError(error);
     }
-    return loginUser;
   }
+
   async findAll(paginationDto: PaginationDto) {
     const { page = 1, limit = 5 } = paginationDto;
     const offset = (page - 1) * limit;
@@ -48,99 +66,161 @@ export class UsersService {
         users: JSON.parse(cachedData),
       };
     } else {
-      const allUser = await this.userRepository.find({
-        skip: offset,
-        take: limit,
-        select: {
-          id: true,
-          fullname: true,
-          email: true,
-          phone_number: true,
-          role: true,
-          isActive: true,
-          refresh_token: true,
-        },
-        relations: {
+      try {
+        const allUser = await this.prismaRepository.users.findMany({
+          skip: offset,
+          take: limit,
+          include: {
+            orders: true,
+          },
+        });
+        const allUserWithoutPassword = allUser.map((user) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { password, ...userWithoutPassword } = user;
+          return userWithoutPassword;
+        });
+
+        if (allUserWithoutPassword.length === 0) {
+          throw new NotFoundException('Data not found');
+        }
+        await this.redis.set(cacheKey, JSON.stringify(allUserWithoutPassword));
+        return {
+          message: 'All User',
+          users: allUserWithoutPassword,
+        };
+      } catch (error) {
+        this.handlePrismaError(error);
+      }
+    }
+  }
+
+  async findOne(id: string) {
+    try {
+      const findUser = await this.prismaRepository.users.findUnique({
+        where: { id },
+        include: {
           orders: true,
         },
       });
-      if (allUser.length == 0) {
+      if (!findUser) {
+        throw new NotFoundException('User not found');
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...userWithoutPassword } = findUser;
+      return userWithoutPassword;
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    try {
+      const getUser = await this.prismaRepository.users.findUnique({
+        where: { id },
+      });
+      if (!getUser) {
+        throw new NotFoundException('User not found');
+      }
+      await this.prismaRepository.users.update({
+        where: { id },
+        data: { ...updateUserDto },
+      });
+      await this.redis.set(
+        id,
+        JSON.stringify({ ...getUser, ...updateUserDto }),
+      );
+      return {
+        message: 'Updated',
+        user_id: getUser.id,
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
+  }
+
+  async activateUser(email: string) {
+    try {
+      const findUser = await this.prismaRepository.users.findUnique({
+        where: { email },
+      });
+      if (!findUser) {
         throw new NotFoundException('Data not found');
       }
-      await this.redis.set(cacheKey, JSON.stringify(allUser));
+      await this.prismaRepository.users.update({
+        where: { email: email },
+        data: { isActive: true },
+      });
+      await this.redis.set(
+        email,
+        JSON.stringify({ ...findUser, isActive: true }),
+      );
       return {
-        message: 'All User',
-        users: allUser,
+        message: 'User Account activated',
       };
+    } catch (error) {
+      this.handlePrismaError(error);
     }
   }
-  async findOne(id: string) {
-    const findUser = await this.userRepository.findOne({
-      where: { id },
-      select: {
-        id: true,
-        fullname: true,
-        email: true,
-        phone_number: true,
-        role: true,
-        isActive: true,
-        refresh_token: true,
-        orders: true,
-      },
-      relations: ['orders'],
-    });
-    if (!findUser) {
-      throw new NotFoundException('User not found');
-    }
-    return findUser;
-  }
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    const getUser = await this.userRepository.findOneBy({ id });
-    if (!getUser) {
-      throw new NotFoundException('User not found');
-    }
-    await this.userRepository.update(id, updateUserDto);
-    await this.redis.set(id, JSON.stringify({ ...getUser, ...updateUserDto }));
-    return {
-      message: 'Updated',
-      user_id: getUser.id,
-    };
-  }
-  async activateUser(email: string) {
-    const findUser = await this.userRepository.findOneBy({ email });
-    if (!findUser) {
-      throw new NotFoundException('Data not found');
-    }
-    await this.userRepository.update({ email: email }, { isActive: true });
-    await this.redis.set(
-      email,
-      JSON.stringify({ ...findUser, isActive: true }),
-    );
-    return {
-      message: 'User Account activated',
-    };
-  }
+
   async saveToken(id: string, refreshToken: string) {
-    await this.userRepository.update(id, { refresh_token: refreshToken });
-    await this.redis.set(id, JSON.stringify({ refresh_token: refreshToken }));
-  }
-  async updatePassword(email: string, password: string) {
-    await this.userRepository.update({ email: email }, { password: password });
-    await this.redis.set(email, JSON.stringify({ password: password }));
-    return {
-      message: 'User password resetted successfully',
-    };
-  }
-  async remove(id: string) {
-    const findUser = await this.userRepository.findOneBy({ id });
-    if (!findUser) {
-      throw new NotFoundException('User is not found');
+    try {
+      await this.prismaRepository.users.update({
+        where: { id },
+        data: {
+          refresh_token: refreshToken,
+        },
+      });
+      await this.redis.set(id, JSON.stringify({ refresh_token: refreshToken }));
+    } catch (error) {
+      this.handlePrismaError(error);
     }
-    await this.userRepository.delete(id);
-    await this.redis.del(id);
-    return {
-      message: 'Deleted',
-      user_id: findUser.id,
-    };
+  }
+
+  async updatePassword(email: string, password: string) {
+    try {
+      await this.prismaRepository.users.update({
+        where: { email: email },
+        data: { password: password },
+      });
+      await this.redis.set(email, JSON.stringify({ password: password }));
+      return {
+        message: 'User password reset successfully',
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
+  }
+
+  async remove(id: string) {
+    try {
+      const findUser = await this.prismaRepository.users.findUnique({
+        where: { id },
+      });
+      if (!findUser) {
+        throw new NotFoundException('User is not found');
+      }
+      await this.prismaRepository.users.delete({ where: { id } });
+      await this.redis.del(id);
+      return {
+        message: 'Deleted',
+        user_id: findUser.id,
+      };
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
+  }
+  private handlePrismaError(error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      switch (error.code) {
+        case 'P2002':
+          throw new ConflictException('Unique constraint failed');
+        case 'P2025':
+          throw new NotFoundException('Record not found');
+        default:
+          throw new InternalServerErrorException('A database error occurred');
+      }
+    } else {
+      throw new InternalServerErrorException('An unexpected error occurred');
+    }
   }
 }

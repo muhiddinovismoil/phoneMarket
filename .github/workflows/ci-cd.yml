@@ -58,6 +58,10 @@ jobs:
           docker compose down || { echo "Failed to stop Docker services!"; exit 1; }
           docker compose up -d || { echo "Failed to start Docker services!"; exit 1; }
 
+          echo "Database tables creating ..."
+          npx prisma generate
+          npx prisma migrate deploy
+
           echo "Restarting application with PM2..."
           npx pm2 restart ${{ secrets.APP_NAME }} || { echo "PM2 restart failed!"; exit 1; }
           ENDSSH

@@ -1,33 +1,42 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Products } from './entities/product.entity';
-import { Like, Repository } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { PaginationDto } from '../constants/paginationDto/pagination.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+
 @Injectable()
 export class ProductsService {
   constructor(
-    @InjectRepository(Products) private productRepository: Repository<Products>,
+    private readonly prismaRepository: PrismaService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
+
   async create(createProductDto: CreateProductDto) {
-    const newProduct = await this.productRepository.create({
-      ...createProductDto,
-    });
-    await this.redis.set(newProduct.id, JSON.stringify(newProduct));
-    await this.productRepository.save(newProduct);
-    return {
-      message: 'Product successfully added',
-      productId: newProduct.id,
-    };
+    try {
+      const newProduct = await this.prismaRepository.product.create({
+        data: { ...createProductDto },
+      });
+      await this.redis.set(newProduct.id, JSON.stringify(newProduct));
+      return {
+        message: 'Product successfully added',
+        productId: newProduct.id,
+      };
+    } catch (error) {
+      this.handleError(error);
+    }
   }
+
   async findAll(paginationDto: PaginationDto) {
     const { page = 1, limit = 5, search, filter } = paginationDto;
     const offset = (page - 1) * limit;
-
     const cacheKey = `products:page=${page}:limit=${limit}:search=${search}:filter=${filter}`;
     const cachedData = await this.redis.get(cacheKey);
     if (cachedData) {
@@ -36,44 +45,55 @@ export class ProductsService {
         products: JSON.parse(cachedData),
       };
     } else {
-      const queryOptions: any = {
-        skip: offset,
-        take: limit,
-        where: {},
-        relations: ['orderProducts'],
-      };
-
-      if (search) {
-        queryOptions.where.name = Like(`%${search}%`);
+      try {
+        const queryOptions: any = {
+          skip: offset,
+          take: limit,
+          where: {},
+          include: {
+            orderProducts: true,
+          },
+        };
+        if (search) {
+          queryOptions.where.name = {
+            contains: search,
+            mode: 'insensitive',
+          };
+        }
+        if (filter) {
+          const filterConditions: any = {};
+          if (filter.name) {
+            filterConditions.name = {
+              contains: filter.name,
+              mode: 'insensitive',
+            };
+          }
+          if (filter.price) {
+            filterConditions.price = filter.price;
+          }
+          if (filter.info) {
+            filterConditions.info = {
+              contains: filter.info,
+              mode: 'insensitive',
+            };
+          }
+          if (Object.keys(filterConditions).length > 0) {
+            queryOptions.where = { ...queryOptions.where, ...filterConditions };
+          }
+        }
+        const getProducts =
+          await this.prismaRepository.product.findMany(queryOptions);
+        if (getProducts.length === 0) {
+          throw new NotFoundException('Products not found');
+        }
+        await this.redis.set(cacheKey, JSON.stringify(getProducts));
+        return {
+          message: 'All Products',
+          products: getProducts,
+        };
+      } catch (error) {
+        this.handleError(error);
       }
-
-      if (filter) {
-        const filterConditions = [];
-        if (filter.name) {
-          filterConditions.push({ name: Like(`%${filter.name}%`) });
-        }
-        if (filter.price) {
-          filterConditions.push({ price: filter.price });
-        }
-        if (filter.info) {
-          filterConditions.push({ info: Like(`%${filter.info}%`) });
-        }
-
-        if (filterConditions.length > 0) {
-          queryOptions.where = filterConditions;
-        }
-      }
-
-      const getProducts = await this.productRepository.find(queryOptions);
-      if (getProducts.length === 0) {
-        throw new NotFoundException('Products not found');
-      }
-
-      await this.redis.set(cacheKey, JSON.stringify(getProducts));
-      return {
-        message: 'All Products',
-        products: getProducts,
-      };
     }
   }
 
@@ -85,41 +105,79 @@ export class ProductsService {
         product: JSON.parse(redisData),
       };
     }
-    const getProduct = await this.productRepository.findOneBy({ id });
-    if (!getProduct) {
-      throw new NotFoundException('Product not found');
+    try {
+      const getProduct = await this.prismaRepository.product.findUnique({
+        where: { id },
+        include: {
+          orderProducts: true,
+        },
+      });
+      if (!getProduct) {
+        throw new NotFoundException('Product not found');
+      }
+      await this.redis.set(id, JSON.stringify(getProduct));
+      return {
+        message: 'One Product',
+        product: getProduct,
+      };
+    } catch (error) {
+      this.handleError(error);
     }
-    await this.redis.set(id, JSON.stringify(getProduct));
-    return {
-      message: 'One Product',
-      product: getProduct,
-    };
   }
+
   async update(id: string, updateProductDto: UpdateProductDto) {
-    const getData = await this.productRepository.findOneBy({ id });
-    if (!getData) {
-      throw new NotFoundException('Product not found');
+    try {
+      const getData = await this.prismaRepository.product.findUnique({
+        where: { id },
+      });
+      if (!getData) {
+        throw new NotFoundException('Product not found');
+      }
+      const updatedProduct = await this.prismaRepository.product.update({
+        where: { id },
+        data: { ...updateProductDto },
+      });
+      await this.redis.set(id, JSON.stringify(updatedProduct));
+      return {
+        message: 'Product updated',
+        productId: updatedProduct.id,
+      };
+    } catch (error) {
+      this.handleError(error);
     }
-    await this.productRepository.update(id, updateProductDto);
-    await this.redis.set(
-      id,
-      JSON.stringify({ ...getData, ...updateProductDto }),
-    );
-    return {
-      message: 'Product updated',
-      productId: getData.id,
-    };
   }
+
   async remove(id: string) {
-    const getData = await this.productRepository.findOneBy({ id });
-    if (!getData) {
-      throw new NotFoundException('Product not found');
+    try {
+      const getData = await this.prismaRepository.product.findUnique({
+        where: { id },
+      });
+      if (!getData) {
+        throw new NotFoundException('Product not found');
+      }
+      await this.prismaRepository.product.delete({
+        where: { id },
+      });
+      await this.redis.del(id);
+      return {
+        message: 'Product deleted',
+        productId: getData.id,
+      };
+    } catch (error) {
+      this.handleError(error);
     }
-    await this.productRepository.delete(id);
-    await this.redis.del(id);
-    return {
-      message: 'Product deleted',
-      productId: getData.id,
-    };
+  }
+
+  private handleError(error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      switch (error.code) {
+        case 'P2002':
+          throw new ConflictException('Unique constraint failed');
+        default:
+          throw new InternalServerErrorException('A database error occurred');
+      }
+    } else {
+      throw new InternalServerErrorException('An unexpected error occurred');
+    }
   }
 }

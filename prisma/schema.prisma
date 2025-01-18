@@ -12,3 +12,65 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model otp {
+  id       String   @id @default(uuid())
+  user_id  String   @unique
+  otp_code String
+  expires  DateTime @default(dbgenerated("now() + interval '2 minutes'"))
+  users    users?   @relation(fields: [user_id], references: [id])
+}
+
+model users {
+  id            String  @id @default(uuid())
+  fullname      String
+  email         String  @unique
+  password      String
+  phone_number  String  @unique
+  isActive      Boolean @default(false)
+  role          Role    @default(USER)
+  refresh_token String?
+  orders        order[]
+  otps          otp[]
+}
+
+model order {
+  id            String           @id @default(uuid())
+  user_id       String
+  total_price   Decimal
+  status        OrderStatus
+  users         users?           @relation(fields: [user_id], references: [id])
+  orderProducts order_products[]
+}
+
+model product {
+  id            String           @id @default(uuid())
+  name          String
+  price         Decimal
+  info          String
+  is_active     Boolean          @default(false)
+  quantity      Int
+  orderProducts order_products[]
+}
+
+model order_products {
+  id         String  @id @default(uuid())
+  product_id String
+  order_id   String
+  product    product @relation(fields: [product_id], references: [id])
+  order      order   @relation(fields: [order_id], references: [id])
+}
+
+enum Role {
+  USER
+  ADMIN
+  SuperAdmin
+}
+
+enum OrderStatus {
+  Pending
+  Processing
+  Shipped
+  Delivered
+  Cancelled
+}

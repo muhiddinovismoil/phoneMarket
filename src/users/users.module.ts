@@ -1,15 +1,13 @@
 import { Module } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Users } from './entities/user.entity';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EmailConfig } from '../configs/email';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Users]),
     MailerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -34,7 +32,7 @@ import { EmailConfig } from '../configs/email';
     }),
   ],
   controllers: [UsersController],
-  providers: [UsersService],
+  providers: [UsersService, PrismaService],
   exports: [UsersService],
 })
 export class UsersModule {}
