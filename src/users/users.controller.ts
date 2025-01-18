@@ -114,7 +114,7 @@ export class UsersController {
   })
   @ApiNotFoundResponse({ description: 'User not found' })
   @UseGuards(AuthGuard, RoleGuard)
-  @Roles(Role.admin, Role.superAdmin)
+  @Roles(Role.superAdmin)
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return await this.usersService.remove(id);

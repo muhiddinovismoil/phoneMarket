@@ -86,7 +86,7 @@ export class ProductsService {
       };
     }
     const getProduct = await this.productRepository.findOneBy({ id });
-    if (getProduct) {
+    if (!getProduct) {
       throw new NotFoundException('Product not found');
     }
     await this.redis.set(id, JSON.stringify(getProduct));

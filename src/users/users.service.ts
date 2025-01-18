@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { SignUpAuthDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,9 +19,23 @@ export class UsersService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
   async create(createUserDto: SignUpAuthDto) {
-    const newUser = await this.userRepository.save(createUserDto);
-    await this.redis.set(newUser.id, JSON.stringify(newUser));
-    return newUser;
+    const getUser = await this.userRepository.findOneBy({
+      email: createUserDto.email,
+    });
+    if (!getUser) {
+      const newUser = await this.userRepository.save(createUserDto);
+      await this.redis.set(newUser.id, JSON.stringify(newUser));
+      return newUser;
+    } else {
+      throw new BadRequestException('User already exists');
+    }
+  }
+  async findByEmail(email: string) {
+    const loginUser = await this.userRepository.findOneBy({ email });
+    if (!loginUser) {
+      throw new NotFoundException('User not found');
+    }
+    return loginUser;
   }
   async findAll(paginationDto: PaginationDto) {
     const { page = 1, limit = 5 } = paginationDto;
@@ -33,7 +51,18 @@ export class UsersService {
       const allUser = await this.userRepository.find({
         skip: offset,
         take: limit,
-        relations: ['orders'],
+        select: {
+          id: true,
+          fullname: true,
+          email: true,
+          phone_number: true,
+          role: true,
+          isActive: true,
+          refresh_token: true,
+        },
+        relations: {
+          orders: true,
+        },
       });
       if (allUser.length == 0) {
         throw new NotFoundException('Data not found');
@@ -46,31 +75,24 @@ export class UsersService {
     }
   }
   async findOne(id: string) {
-    const cachedData = await this.redis.get(id);
-    if (cachedData) {
-      return JSON.parse(cachedData);
-    }
-    const findUser = await this.userRepository.findOneBy({ id });
+    const findUser = await this.userRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        fullname: true,
+        email: true,
+        phone_number: true,
+        role: true,
+        isActive: true,
+        refresh_token: true,
+        orders: true,
+      },
+      relations: ['orders'],
+    });
     if (!findUser) {
       throw new NotFoundException('User not found');
     }
-    await this.redis.set(findUser.id, JSON.stringify(findUser));
     return findUser;
-  }
-  async findByEmail(email: string) {
-    const cachedData = await this.redis.get(email);
-    if (cachedData) {
-      return JSON.parse(cachedData);
-    }
-    const findUserByEmail = await this.userRepository.findOneBy({ email });
-    if (!findUserByEmail) {
-      throw new NotFoundException('User not found');
-    }
-    await this.redis.set(
-      findUserByEmail.email,
-      JSON.stringify(findUserByEmail),
-    );
-    return findUserByEmail;
   }
   async update(id: string, updateUserDto: UpdateUserDto) {
     const getUser = await this.userRepository.findOneBy({ id });

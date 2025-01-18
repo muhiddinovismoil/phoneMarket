@@ -10,6 +10,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LogtailService } from './logtail.service';
 import { APP_GUARD } from '@nestjs/core';
+import { PrismaService } from './prisma/prisma.service';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -49,6 +50,7 @@ import { APP_GUARD } from '@nestjs/core';
       useClass: ThrottlerGuard,
     },
     LogtailService,
+    PrismaService,
   ],
   exports: [LogtailService],
 })

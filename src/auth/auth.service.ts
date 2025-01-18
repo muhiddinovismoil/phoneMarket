@@ -29,10 +29,6 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
   async signup(signUpAuthDto: SignUpAuthDto) {
-    const checkUser = await this.userService.findByEmail(signUpAuthDto.email);
-    if (checkUser) {
-      throw new BadRequestException('User already exists');
-    }
     const hashPass = await bcrypt.hash(signUpAuthDto.password, 10);
     const user = await this.userService.create({
       ...signUpAuthDto,
@@ -111,7 +107,11 @@ export class AuthService {
   }
   async resetPassword(resetPasswordDto: ResetPasswordAuthDto) {
     const findUser = await this.userService.findByEmail(resetPasswordDto.email);
-    if (findUser.password == resetPasswordDto.oldPassword) {
+    const isChecked = await bcrypt.compare(
+      resetPasswordDto.oldPassword,
+      findUser.password,
+    );
+    if (isChecked) {
       await this.userService.updatePassword(
         resetPasswordDto.email,
         await bcrypt.hash(resetPasswordDto.password, 10),
