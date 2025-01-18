@@ -30,7 +30,7 @@ export class ProductsService {
         productId: newProduct.id,
       };
     } catch (error) {
-      this.handleError(error);
+      this.handlePrismaError(error);
     }
   }
 
@@ -92,7 +92,7 @@ export class ProductsService {
           products: getProducts,
         };
       } catch (error) {
-        this.handleError(error);
+        this.handlePrismaError(error);
       }
     }
   }
@@ -121,7 +121,7 @@ export class ProductsService {
         product: getProduct,
       };
     } catch (error) {
-      this.handleError(error);
+      this.handlePrismaError(error);
     }
   }
 
@@ -143,7 +143,7 @@ export class ProductsService {
         productId: updatedProduct.id,
       };
     } catch (error) {
-      this.handleError(error);
+      this.handlePrismaError(error);
     }
   }
 
@@ -164,15 +164,17 @@ export class ProductsService {
         productId: getData.id,
       };
     } catch (error) {
-      this.handleError(error);
+      this.handlePrismaError(error);
     }
   }
 
-  private handleError(error: any) {
+  private handlePrismaError(error: any) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       switch (error.code) {
         case 'P2002':
           throw new ConflictException('Unique constraint failed');
+        case 'P2025':
+          throw new NotFoundException('Record not found');
         default:
           throw new InternalServerErrorException('A database error occurred');
       }
